@@ -400,23 +400,24 @@
     .mystery-overline{color:#087f89;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.08em}
     .mystery-game h4,.mystery-result h4{font-size:27px;line-height:1.15;font-weight:850;margin:8px 0}
     .mystery-subtitle{font-size:14px;color:#58758a}
-    .mystery-clues{display:grid;gap:8px;margin:15px 0}
-    .mystery-clue{padding:12px 14px;border-radius:12px;background:#eaf7f5;color:#154e5b}
+    .mystery-stage{display:grid;grid-template-columns:minmax(180px,.85fr) minmax(0,1.15fr);gap:16px;align-items:start;margin-top:16px}
+    .mystery-play{min-width:0}
+    .mystery-clues{display:grid;gap:7px;margin:0 0 9px}
+    .mystery-clues:empty{display:none}
+    .mystery-clue{padding:9px 11px;border-radius:11px;background:#eaf7f5;color:#154e5b}
     .mystery-clue span{font-size:12px;font-weight:800;color:#087f89;text-transform:uppercase}
     .mystery-clue p{margin-top:3px;font-weight:650}
-    .mystery-shape{display:grid;place-items:center;height:130px;margin-top:6px}
-    .mystery-shape .album-shape{position:static;width:90%;height:100%;opacity:1;fill:#147f91;stroke:none}
+    .mystery-shape{display:flex;align-items:center;justify-content:center;height:205px;min-width:0;padding:10px;overflow:hidden;border-radius:14px;background:radial-gradient(circle at 50% 45%,#e8f8f3,#dcefeb)}
+    .mystery-silhouette{display:block;width:100%;max-width:280px;height:100%;flex:none;overflow:hidden;fill:#147f91}
     .mystery-reveal{padding:10px 14px;border-radius:10px;background:#f3e9cc;color:#715221;font-weight:750}
-    .mystery-form{margin-top:20px}
-    .mystery-form label{display:block;margin-bottom:6px;font-size:13px;font-weight:750}
-    .mystery-form>div{display:flex;gap:8px}
-    .mystery-form input{min-width:0;flex:1;padding:11px 12px;border:1px solid #a8cbd0;border-radius:10px;font-size:16px}
-    .mystery-form button{padding:10px 16px;border-radius:10px;background:#087f89;color:white;font-weight:800}
-    .mystery-feedback{min-height:22px;margin-top:12px;color:#566f80;font-size:14px}
+    .mystery-one-shot{margin:13px 0 8px;color:#58758a;font-size:12px;font-weight:750}
+    .mystery-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .mystery-option{min-width:0;min-height:51px;padding:9px 8px;border:1px solid #a8cbd0;border-radius:11px;background:#fff;color:#154e5b;font-size:13px;font-weight:800;line-height:1.17;overflow-wrap:anywhere;transition:background .15s,border-color .15s}
+    .mystery-option:hover,.mystery-option:focus-visible{background:#eaf7f5;border-color:#087f89;outline:2px solid transparent}
     .mystery-result{text-align:center;padding:15px 0}
     .mystery-result p{margin-top:8px;color:#456779}
     .mystery-result.is-won h4{color:#087f89}
-    @media(max-width:420px){.mystery-form>div{flex-direction:column}.mystery-form button{min-height:44px}}
+    @media(max-width:570px){.mystery-stage{grid-template-columns:1fr;gap:12px}.mystery-shape{height:146px}.mystery-option{min-height:52px}}
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800 home-active">
@@ -809,8 +810,8 @@
       
 <script src="./achievements.js?v=0310-39" defer></script>
 <script src="./country-card-data.js?v=0310-39" defer></script>
-<script src="./country-mysteries.js?v=1013-44" defer></script>
-<script src="./app.js?v=1013-44" defer></script>
+<script src="./country-mysteries.js?v=1014-46" defer></script>
+<script src="./app.js?v=1014-46" defer></script>
 
     </div>
     </div>

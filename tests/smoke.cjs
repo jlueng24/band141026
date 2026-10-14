@@ -173,9 +173,11 @@ function checkDailyQuestion() {
   const again=vm.runInContext('makeDailyQuestion()',ctx);
   assert.deepEqual(JSON.parse(JSON.stringify(first)),JSON.parse(JSON.stringify(again)));
   assert.equal(first.kind,'mystery');
+  assert.equal(first.schema,3);
   assert.deepEqual(Array.from(first.clues,c=>c.level),[1,2,3]);
-  assert.equal(vm.runInContext("mysteryMatches('ESPAÑA',{code:'es',nameES:'España'})",ctx),true);
-  assert.equal(vm.runInContext("mysteryMatches('Portugal',{code:'es',nameES:'España'})",ctx),false);
+  assert.equal(first.options.length,4);
+  assert.equal(new Set(first.options).size,4);
+  assert(first.options.includes(first.code));
 
   const dateCtx=vm.createContext({Date:class {
     getFullYear(){return 2026} getMonth(){return 8} getDate(){return 30}
@@ -187,16 +189,24 @@ function checkDailyQuestion() {
 
 function checkMysteryCoverage(){
   const data=fs.readFileSync(path.join(root,'country-card-data.js'),'utf8');
-  const ctx=vm.createContext({ALL:[],Date,Intl,REGION_LABELS:{Europe:'Europa',Asia:'Asia',Africa:'África',Americas:'América',Oceania:'Oceanía'}});
+  const ctx=vm.createContext({ALL:[],Date,Intl,escapeCardText:s=>s,REGION_LABELS:{Europe:'Europa',Asia:'Asia',Africa:'África',Americas:'América',Oceania:'Oceanía'}});
   vm.runInContext(data + mysteryData + section('function hashSeed(', '/* ========= Tiempo y pausa ========= */'),ctx);
   const catalog=vm.runInContext("mysteryCatalog().map(c=>({code:c.code,clues:mysteryCandidates(c,'2026-10-13')}))",ctx);
   assert.equal(catalog.length,199,'el misterio usa países y excluye territorios del catálogo');
   assert(catalog.every(c=>c.clues.length===3 && c.clues.every((clue,i)=>clue?.text && clue.level===i+1)));
+  assert(catalog.every(c=>c.clues.every(clue=>clue.type!=='silueta')));
   assert(catalog.every(c=>!c.clues.some(clue=>/undefined|null/.test(clue.text))));
   assert(catalog.every(c=>c.clues.every(clue=>clue.source?.startsWith('https://es.wikipedia.org/wiki/'))));
   assert(catalog.every(c=>!c.clues.some(clue=>['región','superficie','continente','código'].includes(clue.type))));
   const catalogWeeks=vm.runInContext("['2026-10-13','2026-10-14','2026-11-03'].map(day=>mysteryCatalog().map(c=>mysteryCandidates(c,day)))",ctx);
   assert(catalogWeeks.every(week=>week.every(clues=>clues.every(x=>x?.source))));
+  const silhouette=vm.runInContext("mysterySilhouette('ag','Antigua y Barbuda')",ctx);
+  assert.match(silhouette,/class="mystery-silhouette" viewBox="301\.0526 412\.5663 0\.8793 2\.4093"/);
+  assert.match(silhouette,/aria-label="Silueta del país oculto"/);
+  assert.doesNotMatch(silhouette,/album-shape/);
+  const options=vm.runInContext("['ag','au','us','va','jp','nu'].map(code=>{const pool=mysteryCatalog();const c=pool.find(x=>x.code===code);return {code,region:c.region,choices:mysteryOptions(c,'2026-10-14',pool)}})",ctx);
+  assert(options.every(x=>x.choices.length===4 && new Set(x.choices).size===4 && x.choices.includes(x.code)));
+  assert(options.every(x=>x.choices.every(code=>vm.runInContext(`mysteryCatalog().find(c=>c.code==='${code}').region`,ctx)===x.region)));
 }
 
 function checkMysteryPlay(){
@@ -204,11 +214,12 @@ function checkMysteryPlay(){
   const saved={};
   const clueList={appendChild(){}};
   const reveal={classList:{add(){}},addEventListener(_,fn){this.click=fn},click(){},textContent:''};
-  const feedback={textContent:''};
-  const form={addEventListener(_,fn){this.submit=fn}};
-  const input={value:'',select(){}};
-  const parts={'.mystery-clues':clueList,'.mystery-reveal':reveal,'.mystery-feedback':feedback,'.mystery-form':form,'#mysteryAnswer':input};
-  const container={innerHTML:'',textContent:'',querySelector:selector=>parts[selector]};
+  const parts={'.mystery-clues':clueList,'.mystery-reveal':reveal};
+  const container={markup:'',buttons:[],textContent:'',
+    set innerHTML(html){this.markup=html;this.buttons=[...html.matchAll(/data-country-code="([a-z]+)"/g)].map(([,code])=>({dataset:{countryCode:code},addEventListener(_,fn){this.click=fn}}))},
+    get innerHTML(){return this.markup},
+    querySelector:selector=>parts[selector],
+    querySelectorAll(selector){return selector==='.mystery-option'?this.buttons:[]}};
   const tile={dataset:{}};
   const ctx=vm.createContext({Date,Intl,ALL:[],LS:{challenge:'challenge',dailyQuestion:'question',dailyProgress:'progress'},
     REGION_LABELS:{Europe:'Europa',Asia:'Asia',Africa:'África',Americas:'América',Oceania:'Oceanía'},
@@ -216,24 +227,46 @@ function checkMysteryPlay(){
     lsGet:(key,defaultValue)=>saved[key] ?? defaultValue,lsSet:(key,value)=>{saved[key]=structuredClone(value)},
     $:selector=>selector==='#dailyQuestion'?container:tile,
     document:{createElement:()=>({className:'',innerHTML:'',insertAdjacentHTML(){}})},
-    albumShape:()=>'<svg></svg>',escapeCardText:value=>value,
+    escapeCardText:value=>value,
     ensureAlbumEntry:()=>{ctx.albumEntryCreated=true},unlockAchievement(){},fxCorrect(){},fxWrong(){}
   });
   vm.runInContext(data + mysteryData + section('function hashSeed(', '/* ========= Tiempo y pausa ========= */'),ctx);
   vm.runInContext('renderDailyModal()',ctx);
-  reveal.click();reveal.click();
-  input.value='Respuesta errónea';form.submit({preventDefault(){}});
-  assert.equal(saved.progress.revealed,2);
-  assert.equal(saved.progress.attempts,1);
+  assert.match(container.innerHTML,/Silueta del país oculto/);
+  assert.match(container.innerHTML,/Solo tienes una respuesta/);
+  assert.equal(container.buttons.length,4);
+  const answer=vm.runInContext('makeDailyQuestion().code',ctx);
+  const wrong=container.buttons.find(button=>button.dataset.countryCode!==answer);
+  wrong.click();
+  assert.equal(saved.challenge['2026-10-13'].correct,false);
+  assert.equal(saved.challenge['2026-10-13'].attempts,1);
+  assert.equal(saved.challenge['2026-10-13'].selectedCode,wrong.dataset.countryCode);
+  assert.match(container.innerHTML,/El país era/);
+  assert.equal(container.buttons.length,0,'tras fallar desaparecen las opciones');
+  assert.equal(ctx.albumEntryCreated,undefined);
+  delete saved.challenge;delete saved.progress;
   vm.runInContext('renderDailyModal()',ctx);
-  assert.match(feedback.textContent,/dos intentos/);
-  const country=vm.runInContext("mysteryCatalog().find(c=>c.code===makeDailyQuestion().code)",ctx);
-  input.value=country.nameES;form.submit({preventDefault(){}});
+  container.buttons.find(button=>button.dataset.countryCode===answer).click();
+  assert.equal(saved.challenge['2026-10-13'].cluesUsed,0,'se puede ganar con solo la silueta');
+  assert.equal(ctx.albumEntryCreated,true);
+  delete saved.challenge;delete saved.progress;
+  vm.runInContext('renderDailyModal()',ctx);
+  reveal.click();reveal.click();
+  assert.equal(saved.progress.revealed,2);
+  assert.equal(saved.progress.schema,3);
+  vm.runInContext('renderDailyModal()',ctx);
+  const correctButton=container.buttons.find(button=>button.dataset.countryCode===answer);
+  correctButton.click();
   assert.equal(saved.challenge['2026-10-13'].correct,true);
   assert.equal(saved.challenge['2026-10-13'].cluesUsed,2);
+  assert.equal(saved.challenge['2026-10-13'].attempts,1);
   assert.equal(ctx.albumEntryCreated,true);
-  vm.runInContext('renderDailyModal()',ctx);
   assert.match(container.innerHTML,/Misterio resuelto/);
+  delete saved.challenge;delete saved.progress;
+  vm.runInContext('renderDailyModal()',ctx);
+  reveal.click();reveal.click();reveal.click();
+  container.buttons.find(button=>button.dataset.countryCode===answer).click();
+  assert.equal(saved.challenge['2026-10-13'].cluesUsed,3,'el pin también se gana con todas las pistas');
 }
 
 function checkPause(){

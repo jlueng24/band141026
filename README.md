@@ -1,4 +1,4 @@
-# Cartas del Mundo — versión 4.4
+# Cartas del Mundo — versión 4.6
 
 ## Subir a GitHub Pages
 
@@ -10,9 +10,11 @@ La primera pantalla pide el nombre de jugador. «Continuar» lleva a la selecci�
 
 ## Misterio del día: países
 
-Cada fecha local selecciona el mismo país de un conjunto estable de 199 países del catálogo; se excluyen los territorios dependientes. El jugador escribe el nombre y tiene tres intentos en total. Puede abrir hasta tres pistas, de nivel 1 (difícil), 2 (intermedio) y 3 (silueta). Se puede acertar sin abrir pistas. Los intentos y las pistas abiertas se guardan aunque se cierre la ventana. El pin se gana solo al acertar, sin diferencias por cantidad de pistas. El resultado y el pin quedan asociados al país; un pin puede mostrar su carta aunque la bandera y la capital aún estén pendientes. Los retos anteriores conservan su progreso y los pines históricos cuyo país se hubiese guardado.
+Cada fecha local selecciona el mismo país de un conjunto estable de 199 países del catálogo; se excluyen los territorios dependientes. La silueta aparece desde el principio con cuatro opciones fijas de la misma región. Las alternativas se eligen por subregión, proximidad y tamaño cuando los datos lo permiten. El jugador puede abrir hasta tres pistas de texto antes de elegir. Tiene **una sola respuesta**: si acierta, consigue el pin con independencia de las pistas abiertas; si falla, aparece el país correcto y termina el reto. Las pistas abiertas se guardan aunque cierre la ventana. El resultado y el pin quedan asociados al país; un pin puede mostrar su carta aunque la bandera y la capital aún estén pendientes. Los retos ya terminados conservan su resultado y los pines históricos cuyo país se hubiese guardado.
 
-Los 199 países tienen una ficha propia en `country-mysteries.js`, con pistas concretas de nivel 1 y 2 y su silueta en el nivel 3. Se elige una pista por nivel de forma estable para cada fecha. Las categorías son río, montaña, monumento, ciudad distinta de la capital nacional, equipo de fútbol, frontera, moneda, idioma, personaje y silueta. Se incluyen 1.591 pistas candidatas en total. Cada pista conserva un enlace de fuente a Wikipedia en la ficha; los datos de monedas, idiomas y fronteras proceden también del catálogo mledoze/countries. Las categorías concretas varían según el país: una isla sin fronteras terrestres, por ejemplo, no recibe esa pista.
+La silueta tiene un SVG independiente, ajustado a su espacio para que no se salga de la tarjeta. Se puede responder directamente al verla, sin abrir pistas.
+
+Los 199 países tienen una ficha propia en `country-mysteries.js`. Se elige una pista difícil y dos de nivel intermedio sin repetir exactamente el mismo dato, de forma estable para cada fecha. Las categorías son río, montaña, monumento, ciudad distinta de la capital nacional, equipo de fútbol, frontera, moneda, idioma, personaje y silueta. Se incluyen 1.591 pistas candidatas en total. Cada pista conserva un enlace de fuente a Wikipedia en la ficha; los datos de monedas, idiomas y fronteras proceden también del catálogo mledoze/countries. Las categorías concretas varían según el país: una isla sin fronteras terrestres, por ejemplo, no recibe esa pista.
 
 Los pines mantienen un marco dorado común. España, Japón e Islandia incorporan ilustraciones específicas; los demás utilizan la silueta individual del país con una combinación de color estable.
 
@@ -26,6 +28,6 @@ Los pines mantienen un marco dorado común. España, Japón e Islandia incorpora
 
 ## Verificación técnica
 
-Ejecuta `node tests/smoke.cjs`. Comprueba catálogo y respaldo, modos de juego, Supervivencia, Estudio, tres niveles de pistas con fuentes para los 199 países, formato de respuesta, logros, álbum y resultado final.
+Ejecuta `node tests/smoke.cjs`. Comprueba catálogo y respaldo, modos de juego, Supervivencia, Estudio, silueta y cuatro opciones para los 199 países, tres pistas con fuentes, la respuesta única, logros, álbum y resultado final.
 
 El catálogo mundial se sigue cargando desde la fuente original al jugar; si no hay conexión, las partidas normales ofrecen el respaldo europeo, pero el Misterio del día utiliza las pistas y siluetas locales de los 199 países sin depender de esa descarga.

@@ -412,29 +412,55 @@ function seededShuffle(items, seed){
 }
 function mysteryCandidates(country, day){
   const clues=COUNTRY_MYSTERY_CLUES[country.code]?.clues || [];
-  const pick=(level,tag)=>seededShuffle(clues.filter(x=>x.level===level),hashSeed(`${day}:${country.code}:${tag}`))[0];
-  return [pick(1,'difícil'),pick(2,'intermedia'),pick(3,'silueta')];
+  const hard=seededShuffle(clues.filter(x=>x.level===1),hashSeed(`${day}:${country.code}:difícil`));
+  const medium=seededShuffle(clues.filter(x=>x.level===2),hashSeed(`${day}:${country.code}:intermedia`));
+  const second=medium[0];
+  const third=medium.find(x=>x!==second && x.type!==second.type) || medium[1];
+  return [hard[0],second,third].map((clue,i)=>({...clue,level:i+1}));
 }
 function mysteryEligible(country){
   const territories=new Set('aw ai ax as aq tf bl sh bm bq bv cc cw cx ky eh fk fo gg gi gp gl gf gu hk hm im io je mo mf mp ms mq yt nc nf pn pr pf re gs sj pm sx tc tk um vg vi wf'.split(' '));
   const clues=COUNTRY_MYSTERY_CLUES[country.code]?.clues || [];
   return !!(country.code && !territories.has(country.code) && COUNTRY_SHAPES[country.code] &&
-    [1,2,3].every(level=>clues.some(x=>x.level===level)));
+    clues.some(x=>x.level===1) && clues.filter(x=>x.level===2).length>=2);
 }
 function mysteryCatalog(){
   return COUNTRY_DIRECTORY.map(entry=>({...ALL.find(item=>item.code===entry.code),...entry}))
     .filter(mysteryEligible).sort((a,b)=>a.code.localeCompare(b.code));
 }
+function mysteryOptions(country,day,pool){
+  const center=COUNTRY_MYSTERY_CLUES[country.code];
+  const location=(a,b)=>{
+    if(a?.latlng?.length!==2 || b?.latlng?.length!==2)return 0;
+    const longitude=Math.abs(a.latlng[1]-b.latlng[1]);
+    return Math.hypot(a.latlng[0]-b.latlng[0],Math.min(longitude,360-longitude)*.6)*.07;
+  };
+  const rank=candidate=>{
+    const other=COUNTRY_MYSTERY_CLUES[candidate.code];
+    return (other.subregion===center.subregion?0:10)
+      + Math.abs(Math.log2((other.area+1)/(center.area+1)))*1.6
+      + location(center,other)
+      + (other.landlocked!==center.landlocked?2:0)
+      + (other.hasLandBorders!==center.hasLandBorders?1.5:0);
+  };
+  const closest=seededShuffle(pool.filter(x=>x.code!==country.code && x.region===country.region),
+    hashSeed(`${day}:${country.code}:parecidos`)).sort((a,b)=>rank(a)-rank(b));
+  const paired={cd:'cg',cg:'cd',kr:'kp',kp:'kr'}[country.code];
+  const fixed=paired ? closest.find(x=>x.code===paired) : null;
+  const neighbors=[...(fixed?[fixed]:[]),...closest.filter(x=>x!==fixed)].slice(0,3);
+  return seededShuffle([country,...neighbors],hashSeed(`${day}:${country.code}:opciones`)).map(x=>x.code);
+}
 function makeDailyQuestion(day=todayStr()){
   const saved = lsGet(LS.dailyQuestion, null);
-  if(saved?.day===day && saved.question?.kind==='mystery' && saved.question?.schema===2 && mysteryCatalog().some(x=>x.code===saved.question.code))
+  if(saved?.day===day && saved.question?.kind==='mystery' && saved.question?.schema===3 && mysteryCatalog().some(x=>x.code===saved.question.code))
     return saved.question;
   const pool = mysteryCatalog();
   if(!pool.length) return null;
   // Rotación sin repetición dentro de un ciclo de catálogo completo.
   const epoch = Math.floor(new Date(`${day}T12:00:00`).getTime()/86400000);
   const country = seededShuffle(pool,hashSeed('misterio-paises-v1'))[epoch % pool.length];
-  const question = {kind:'mystery',schema:2,code:country.code,clues:mysteryCandidates(country,day)};
+  const question = {kind:'mystery',schema:3,code:country.code,
+    clues:mysteryCandidates(country,day),options:mysteryOptions(country,day,pool)};
   lsSet(LS.dailyQuestion,{day,question});
   return question;
 }
@@ -443,26 +469,9 @@ function updateDailyTile(){
   const tile = $('#tile-daily');
   if(tile) tile.dataset.desc = done ? 'Ver el misterio de hoy' : 'Un país oculto cada día';
 }
-function normalizeMysteryAnswer(value){
-  return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .toLocaleLowerCase('es').replace(/[^a-z0-9]+/g,' ').trim();
-}
 const MYSTERY_DISPLAY_NAMES={bw:'Botsuana',dj:'Yibuti',gd:'Granada',sl:'Sierra Leona',
   sz:'Esuatini',pw:'Palaos'};
 function mysteryCountryName(country){return MYSTERY_DISPLAY_NAMES[country.code]||country.nameES}
-function mysteryMatches(input,country){
-  const actual=normalizeMysteryAnswer(input);
-  const expected=normalizeMysteryAnswer(mysteryCountryName(country));
-  if(!actual || actual.length < 3) return false;
-  if(actual===expected || actual===normalizeMysteryAnswer(country.nameES)) return true;
-  const aliases={us:['eeuu','estados unidos de america'],gb:['reino unido','gran bretana'],
-    kr:['corea del sur'],kp:['corea del norte'],cz:['chequia','republica checa'],
-    nl:['holanda','paises bajos'],ci:['costa de marfil'],cd:['republica democratica del congo','congo kinshasa'],
-    cg:['republica del congo','congo brazzaville'],tr:['turquia'],es:['espana'],
-    fm:['estados federados de micronesia'],mm:['birmania'],md:['moldova'],
-    va:['vaticano'],ps:['estado de palestina'],pw:['palau','palaos'],sz:['esuatini','eswatini','suazilandia']};
-  return (aliases[country.code]||[]).some(name=>normalizeMysteryAnswer(name)===actual);
-}
 const COUNTRY_PIN_MOTIFS = {
   es:'<circle cx="75" cy="26" r="12" fill="#f4b14c"/><path d="M10 85 Q50 56 90 82 V100 H10Z" fill="#dca365"/><path d="M40 82 V40 H62 V82Z" fill="#fff2dc" stroke="#755648" stroke-width="3"/><path d="M39 41 L51 29 L63 41Z" fill="#9b5d50"/><path d="M51 41 V7 M51 41 L83 28 M51 41 L19 27 M51 41 L36 75" stroke="#694b47" stroke-width="6" stroke-linecap="round"/>',
   jp:'<circle cx="72" cy="28" r="16" fill="#ee6970"/><path d="M6 85 L44 28 L54 43 L66 24 L96 85Z" fill="#4980a0"/><path d="M44 28 L54 43 L66 24 L78 44 L64 38 L53 54 L43 43 L34 48Z" fill="#fff"/><path d="M15 41 Q32 43 44 57" fill="none" stroke="#74536e" stroke-width="4"/><circle cx="21" cy="41" r="5" fill="#f2a6bb"/><circle cx="36" cy="49" r="5" fill="#f2a6bb"/>',
@@ -479,64 +488,69 @@ function countryPin(code,label,large=false){
     <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="49" fill="#e2ae4c"/><circle cx="50" cy="50" r="44" fill="hsl(${hue} 54% 35%)"/>
     ${motif ? `<svg x="13" y="13" width="74" height="74" viewBox="0 0 100 100">${motif}</svg>` : `<svg x="19" y="19" width="62" height="62" viewBox="${box.join(' ')}" preserveAspectRatio="xMidYMid meet"><path d="${shape}" fill="#fff5d9"/></svg>`}</svg></span>`;
 }
+function mysterySilhouette(code){
+  const shape=COUNTRY_SHAPES[code];
+  const box=COUNTRY_SHAPE_VIEWBOX[code];
+  if(!shape||!box) return '<span>Silueta no disponible</span>';
+  return `<svg class="mystery-silhouette" viewBox="${box.join(' ')}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Silueta del país oculto"><path d="${shape}"/></svg>`;
+}
 function renderDailyModal(){
   const day=todayStr();
   const done=lsGet(LS.challenge,{})[day];
   const q=makeDailyQuestion(day);
   const container=$('#dailyQuestion');
   if(!q){container.textContent='No hay datos suficientes para el misterio de hoy.';return}
-  const country=mysteryCatalog().find(x=>x.code===(done?.countryCode || q.code)) ||
+  const catalog=mysteryCatalog();
+  const country=catalog.find(x=>x.code===(done?.countryCode || q.code)) ||
     COUNTRY_DIRECTORY.find(x=>x.code===done?.countryCode);
   if(!country){container.textContent='No se ha podido cargar el país de hoy.';return}
   if(done){
     const pin=done.correct ? countryPin(country.code,mysteryCountryName(country),true) : '';
-    container.innerHTML=`<div class="mystery-result ${done.correct?'is-won':''}">${pin}<h4>${done.correct?'¡Misterio resuelto!':'Misterio terminado'}</h4><p>Hoy era <strong>${escapeCardText(mysteryCountryName(country))}</strong>.</p>${done.correct?'<p>Pin conseguido · Vuelve mañana para otro país.</p>':'<p>Vuelve mañana para intentarlo con otro país.</p>'}</div>`;
+    const selected=catalog.find(x=>x.code===done.selectedCode);
+    container.innerHTML=`<div class="mystery-result ${done.correct?'is-won':''}">${pin}<h4>${done.correct?'¡Misterio resuelto!':'Misterio terminado'}</h4>${selected&&!done.correct?`<p>Elegiste ${escapeCardText(mysteryCountryName(selected))}.</p>`:''}<p>El país era <strong>${escapeCardText(mysteryCountryName(country))}</strong>.</p>${done.correct?'<p>Pin conseguido · Vuelve mañana para otro país.</p>':'<p>Vuelve mañana para intentarlo con otro país.</p>'}</div>`;
     return;
   }
   const prior=lsGet(LS.dailyProgress,null);
-  const draft=prior?.day===day && prior?.code===country.code ? prior : {day,code:country.code,revealed:0,attempts:0};
-  let revealed=0, attempts=draft.attempts;
-  container.innerHTML=`<div class="mystery-game"><p class="mystery-overline">País oculto · ${escapeCardText(REGION_LABELS[country.region]||'Mundo')}</p>
-    <h4>¿Qué país es?</h4><p class="mystery-subtitle">Puedes abrir hasta tres pistas. El pin será tuyo si aciertas.</p>
-    <div class="mystery-clues" aria-live="polite"></div>
+  const draft=prior?.day===day && prior?.code===country.code && prior?.schema===3 ? prior : {day,code:country.code,schema:3,revealed:0};
+  let revealed=0,answered=false;
+  const region=escapeCardText(REGION_LABELS[country.region]||'Mundo');
+  const options=q.options.map(code=>catalog.find(x=>x.code===code)).filter(Boolean);
+  container.innerHTML=`<div class="mystery-game"><p class="mystery-overline">País oculto · ${region}</p>
+    <h4>¿Qué país es?</h4><p class="mystery-subtitle">Observa la silueta. Puedes abrir pistas antes de jugártela.</p>
+    <div class="mystery-stage"><div class="mystery-shape">${mysterySilhouette(country.code)}</div>
+    <div class="mystery-play"><div class="mystery-clues" aria-live="polite"></div>
     <button type="button" class="mystery-reveal">Abrir pista 1 de 3</button>
-    <form class="mystery-form"><label for="mysteryAnswer">Tu respuesta</label><div><input id="mysteryAnswer" autocomplete="off" spellcheck="false" placeholder="Escribe el país" required><button type="submit">Responder</button></div></form>
-    <p class="mystery-feedback" role="status">Tienes tres intentos.</p></div>`;
+    <p class="mystery-one-shot">Elige un país · Solo tienes una respuesta</p>
+    <div class="mystery-options" role="group" aria-label="Elige un país">${options.map(option=>`<button type="button" class="mystery-option" data-country-code="${option.code}">${escapeCardText(mysteryCountryName(option))}</button>`).join('')}</div></div></div></div>`;
   const clueList=container.querySelector('.mystery-clues');
   const reveal=container.querySelector('.mystery-reveal');
-  const feedback=container.querySelector('.mystery-feedback');
   reveal.addEventListener('click',()=>{
     if(revealed>=3)return;
     const clue=q.clues[revealed];
     const item=document.createElement('div');item.className='mystery-clue';
     item.innerHTML=`<span>Pista ${revealed+1}</span><p>${escapeCardText(clue.text)}</p>`;
-    if(clue.type==='silueta') item.insertAdjacentHTML('beforeend',`<div class="mystery-shape">${albumShape(country.code,country.nameES)}</div>`);
     clueList.appendChild(item);
     revealed++;
-    lsSet(LS.dailyProgress,{day,code:country.code,revealed,attempts});
+    lsSet(LS.dailyProgress,{day,code:country.code,schema:3,revealed});
     if(revealed===3)reveal.classList.add('hidden');
     else reveal.textContent=`Abrir pista ${revealed+1} de 3`;
   });
   for(let i=0;i<Math.min(3,draft.revealed);i++) reveal.click();
-  if(attempts) feedback.textContent=`Te ${attempts===1?'quedan dos intentos':'queda un intento'}.`;
-  container.querySelector('.mystery-form').addEventListener('submit',event=>{
-    event.preventDefault();
-    const input=container.querySelector('#mysteryAnswer');
-    const correct=mysteryMatches(input.value,country);
-    attempts++;
-    if(!correct && attempts<3){
-      lsSet(LS.dailyProgress,{day,code:country.code,revealed,attempts});
-      feedback.textContent=`No es ese país. Te ${attempts===1?'quedan dos intentos':'queda un intento'}.`;input.select();return
-    }
+  container.querySelectorAll('.mystery-option').forEach(button=>button.addEventListener('click',()=>{
+    if(answered)return;
+    answered=true;
+    const selectedCode=button.dataset.countryCode;
+    const correct=selectedCode===country.code;
     const challenges=lsGet(LS.challenge,{});
-    challenges[day]={name:playerName||'Anónimo',correct,score:correct?10:0,countryCode:country.code,cluesUsed:revealed,attempts};
+    challenges[day]={name:playerName||'Anónimo',correct,score:correct?10:0,
+      countryCode:country.code,selectedCode,cluesUsed:revealed,attempts:1};
     lsSet(LS.challenge,challenges);
-    if(correct) ensureAlbumEntry(country);
+    if(correct)ensureAlbumEntry(country);
     unlockAchievement('reto_primero');
     correct?fxCorrect():fxWrong();
     updateDailyTile();
     renderDailyModal();
-  });
+  }));
 }
 /* ========= Tiempo y pausa ========= */
 function startTimer(tRemain){
